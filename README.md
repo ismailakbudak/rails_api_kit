@@ -1,4 +1,4 @@
-# ApiKit
+# RailsApiKit
 
 A lightweight Rails toolkit for building standardized, structured API responses with serialization, error handling, filtering, sorting, and pagination.
 
