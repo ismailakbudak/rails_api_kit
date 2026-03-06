@@ -1,0 +1,32 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  ruby_rails_test_matrix:
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
+
+    strategy:
+      matrix:
+        ruby: ['3.3']
+        rails: ['8.0.1']
+        experimental: [false]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{ matrix.ruby }}
+        bundler-cache: true
+
+    - name: Runs code QA and tests
+      env:
+        RAILS_VERSION: ~> ${{ matrix.rails }}
+      run: |
+        rm -rf Gemfile.lock
+        sudo apt-get update
+        sudo apt-get install libsqlite3-dev
+        bundle
+        bundle exec rake
