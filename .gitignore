@@ -4,3 +4,4 @@ Gemfile.lock
 .idea
 tmp
 .yardoc/*
+./rails_api_kit-*
