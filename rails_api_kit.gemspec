@@ -13,7 +13,7 @@ Gem::Specification.new do |spec|
   spec.description   = (
     'JSON:API serialization, error handling, filtering and pagination.'
   )
-  spec.homepage      = 'https://github.com/iakbudak/api_kit'
+  spec.homepage      = 'https://github.com/ismailakbudak/rails_api_kit'
   spec.license       = 'MIT'
 
   spec.required_ruby_version = '>= 3.2.0'

@@ -40,11 +40,18 @@ RSpec.describe UsersController, type: :request do
       let(:user) { users.last }
 
       context 'returns filtered users' do
+        # FFaker names are random, so filter on a token that no other user
+        # can match by accident
+        let(:name_prefix) { 'Filterable' }
+        let(:filterable_name) { "#{name_prefix}#{third_user.id}" }
+
         let(:params) do
+          third_user.update(first_name: filterable_name)
+
           {
             filter: {
               last_name_or_first_name_cont_any: (
-                "#{third_user.first_name[0..5]}%,#{self.class.name}"
+                "#{name_prefix},#{self.class.name}"
               )
             }
           }
@@ -54,6 +61,27 @@ RSpec.describe UsersController, type: :request do
           expect(response).to have_http_status(:ok)
           expect(response_json['data'].size).to eq(1)
           expect(response_json['data'][0]['id']).to eql(third_user.id)
+        end
+
+        # `cont` escapes LIKE wildcards, `matches` passes them through
+        context 'with a wildcard' do
+          let(:params) do
+            third_user.update(first_name: filterable_name)
+
+            {
+              filter: {
+                last_name_or_first_name_matches_any: (
+                  "#{name_prefix}%,#{self.class.name}"
+                )
+              }
+            }
+          end
+
+          it do
+            expect(response).to have_http_status(:ok)
+            expect(response_json['data'].size).to eq(1)
+            expect(response_json['data'][0]['id']).to eql(third_user.id)
+          end
         end
 
         context 'with a comma' do

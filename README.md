@@ -292,7 +292,7 @@ This gem leverages these excellent libraries:
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/iakbudak/api_kit
+Bug reports and pull requests are welcome on GitHub at https://github.com/ismailakbudak/rails_api_kit
 
 This project follows the [Contributor Covenant](http://contributor-covenant.org) code of conduct.
 
