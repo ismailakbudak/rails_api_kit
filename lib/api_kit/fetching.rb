@@ -12,9 +12,7 @@ module ApiKit
 
         result = []
 
-        if serializer_class
-          model_name ||= serializer_class.name.demodulize.delete_suffix("Serializer").underscore
-        end
+        model_name ||= ApiKit::RailsApp.serializer_name(serializer_class)
 
         keys = []
         params[:fields].each do |k, v|

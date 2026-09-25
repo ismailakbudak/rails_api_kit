@@ -28,6 +28,12 @@ ActiveRecord::Schema.define do
     t.integer :quantity
     t.timestamps
   end
+
+  create_table :inventory_items, force: true do |t|
+    t.string :name
+    t.integer :quantity
+    t.timestamps
+  end
 end
 
 
@@ -94,6 +100,32 @@ class UserSerializer < ActiveModel::Serializer
   end
 end
 
+# Namespaced model — `model_name.to_s.underscore` is slash-separated
+# (`inventory/item`) while `model_name.singular` is not
+# (`inventory_item`). The sparse-fieldset type key is the former.
+module Inventory
+  class Item < ApplicationRecord
+    self.table_name = 'inventory_items'
+  end
+
+  class ItemSerializer < ActiveModel::Serializer
+    attributes :id, :name, :quantity
+  end
+end
+
+# A row of an aggregation endpoint: a PORO, not an AR record, rendered as
+# a plain Array. An empty one gives AMS nothing to infer a root key from.
+class ReportRow
+  include ActiveModel::Model
+  include ActiveModel::Serialization
+
+  attr_accessor :label, :total
+end
+
+class ReportRowSerializer < ActiveModel::Serializer
+  attributes :label, :total
+end
+
 class MyUserSerializer < UserSerializer
   attribute :full_name
 
@@ -110,6 +142,8 @@ class Dummy < Rails::Application
     scope defaults: { format: :api } do
       resources :users, only: [ :index, :show ]
       resources :notes, only: [ :update ]
+      resources :inventory_items, only: [ :index ]
+      resources :reports, only: [ :index ]
     end
   end
 end
@@ -167,6 +201,29 @@ class UsersController < BaseApplicationController
     {
       first_name_upcase: params[:upcase]
     }
+  end
+end
+
+class InventoryItemsController < BaseApplicationController
+  include ApiKit::Fetching
+
+  def index
+    render api: Inventory::Item.all, serializer_class: Inventory::ItemSerializer
+  end
+end
+
+class ReportsController < BaseApplicationController
+  include ApiKit::Fetching
+
+  def index
+    rows =
+      if params[:empty]
+        []
+      else
+        [ ReportRow.new(label: 'first', total: 1) ]
+      end
+
+    render api: rows, serializer_class: ReportRowSerializer
   end
 end
 

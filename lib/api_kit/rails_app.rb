@@ -75,6 +75,7 @@ module ApiKit
         options[:fields] = api_fields(serializer_class, ApiKit::RailsApp.fetch_name(many, resource))
         options[:adapter] = :attributes
         options[:each_serializer] = serializer_class
+        ApiKit::RailsApp.assign_collection_root!(options, resource, serializer_class) if many
         data = ActiveModelSerializers::SerializableResource.new(resource, options).as_json
         result[:data] = data
         result.to_json
@@ -107,6 +108,7 @@ module ApiKit
         options[:adapter] = :attributes
         options[:each_serializer] = serializer_class
         if many
+          ApiKit::RailsApp.assign_collection_root!(options, resource, serializer_class)
           data = ActiveModelSerializers::SerializableResource.new(resource, options).as_json
         else
           data = ActiveModelSerializers::SerializableResource.new([ resource ], options).as_json[0]
@@ -137,21 +139,79 @@ module ApiKit
       "#{klass.name}Serializer".constantize
     end
 
-    # Resolves the singular model name for sparse fieldsets
+    # Resolves the model name used as the sparse-fieldset type key
+    #
+    # Mirrors `ActiveModel::Serializer#json_key`, which AMS uses to look a
+    # type up in the fieldset: `object.class.model_name.to_s.underscore`.
+    # NOT `model_name.singular` — that tr()s the namespace separator to an
+    # underscore (`manufacturing_work_order`), so for a namespaced model the
+    # key never matched, the primary type went unconstrained, and AMS fell
+    # through to the pluralised collection key whose value is an empty list:
+    # every attribute of the primary resource was silently dropped.
     #
     # @param many [Boolean] indicates whether the resource is a collection
     # @param resource [Object] serialized resource or collection
-    # @return [String, nil] singular model name when available
+    # @return [String, nil] model name when available
     def self.fetch_name(many, resource)
-      if many
-        if resource.is_a?(ActiveRecord::Relation)
-          resource&.model_name&.singular
-        else
-          resource.first&.model_name&.singular
-        end
-      else
-        resource&.model_name&.singular
-      end
+      record = many ? collection_model(resource) : resource
+      model_name = record&.model_name
+      model_name && model_name.to_s.underscore
+    end
+
+    # Root key for a collection AMS cannot infer one for
+    #
+    # `AMS::CollectionSerializer#json_key` reads the root from its first
+    # element, or from a named collection (`ActiveRecord::Relation` answers
+    # `#name` through its klass). An EMPTY plain Array offers neither, so it
+    # raises `CannotInferRootKeyError` the moment sparse fieldsets are
+    # requested. Aggregation endpoints that render POROs hit exactly that.
+    #
+    # Returns nil whenever AMS can infer the key itself, so a collection that
+    # already works keeps its own root and item serializers keep their
+    # `json_key`.
+    #
+    # @param resource [Object] the collection being serialized
+    # @param serializer_class [Class, NilClass] serializer for its members
+    # @return [String, nil] pluralised root key, or nil to leave it to AMS
+    def self.collection_root(resource, serializer_class)
+      return nil unless resource.respond_to?(:empty?) && resource.empty?
+      return nil if resource.respond_to?(:name)
+
+      name = serializer_name(serializer_class)
+      name && name.pluralize
+    end
+
+    # Sets the collection root only when AMS could not work one out
+    #
+    # @param options [Hash] render options, mutated in place
+    # @param resource [Object] the collection being serialized
+    # @param serializer_class [Class, NilClass] serializer for its members
+    # @return [NilClass]
+    def self.assign_collection_root!(options, resource, serializer_class)
+      return if options[:root]
+
+      root = collection_root(resource, serializer_class)
+      options[:root] = root if root
+      nil
+    end
+
+    # Resolves the type name a serializer class stands for
+    #
+    # @param serializer_class [Class, NilClass] e.g. `V1::UserSerializer`
+    # @return [String, nil] e.g. `"user"`
+    def self.serializer_name(serializer_class)
+      name = serializer_class && serializer_class.name
+      name && name.demodulize.delete_suffix("Serializer").underscore
+    end
+
+    # Resolves the record a collection's model name should come from
+    #
+    # @param resource [Object] the collection
+    # @return [Object, NilClass] a record responding to `model_name`
+    def self.collection_model(resource)
+      return resource if resource.is_a?(ActiveRecord::Relation)
+
+      resource.respond_to?(:first) ? resource.first : nil
     end
   end
 end
