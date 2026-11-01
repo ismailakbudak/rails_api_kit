@@ -5,6 +5,43 @@ require 'spec_helper'
 # injects the fallback "everything for the primary type" entry, or AMS falls
 # through to the pluralised collection key — whose value is an empty list.
 RSpec.describe 'sparse fieldsets', type: :request do
+  describe 'collection roots' do
+    it 'does not load an unloaded relation or issue a query' do
+      relation = Inventory::Item.where(name: 'missing')
+      statements = []
+      subscriber = lambda do |_name, _start, _finish, _id, payload|
+        statements << payload[:sql] unless %w[SCHEMA TRANSACTION].include?(payload[:name])
+      end
+
+      ActiveSupport::Notifications.subscribed(subscriber, 'sql.active_record') do
+        expect(ApiKit::RailsApp.collection_root(relation, Inventory::ItemSerializer)).to be_nil
+      end
+
+      expect(relation.loaded?).to be_falsy
+      expect(statements).to be_empty
+    end
+
+    it 'pluralizes the serializer name for an empty Array' do
+      expect(ApiKit::RailsApp.collection_root([], ReportRowSerializer)).to eq('report_rows')
+    end
+  end
+
+  describe 'GET /inventory_items' do
+    it 'renders an unloaded relation without an emptiness query' do
+      statements = []
+      subscriber = lambda do |_name, _start, _finish, _id, payload|
+        statements << payload[:sql] unless %w[SCHEMA TRANSACTION].include?(payload[:name])
+      end
+
+      ActiveSupport::Notifications.subscribed(subscriber, 'sql.active_record') do
+        get(inventory_items_path, headers: api_headers)
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(statements).not_to include(a_string_matching(/SELECT 1 AS one/i))
+    end
+  end
+
   describe 'GET /inventory_items' do
     let!(:item) { Inventory::Item.create!(name: 'Bolt', quantity: 7) }
 

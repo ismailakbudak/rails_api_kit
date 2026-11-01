@@ -174,8 +174,9 @@ module ApiKit
     # @param serializer_class [Class, NilClass] serializer for its members
     # @return [String, nil] pluralised root key, or nil to leave it to AMS
     def self.collection_root(resource, serializer_class)
-      return nil unless resource.respond_to?(:empty?) && resource.empty?
       return nil if resource.respond_to?(:name)
+      # Check the name first: `empty?` on an unloaded Relation issues a query.
+      return nil unless resource.respond_to?(:empty?) && resource.empty?
 
       name = serializer_name(serializer_class)
       name && name.pluralize
