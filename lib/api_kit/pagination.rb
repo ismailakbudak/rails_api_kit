@@ -49,7 +49,9 @@ module ApiKit
         *api_path_parameters.keys.map(&:to_s)
       ).as_json.with_indifferent_access
 
-      original_params[:page] = original_params[:page].dup || {}
+      # A blank `page=` passed `api_pagination_params` as "no page"; links build a fresh one.
+      page = original_params[:page]
+      original_params[:page] = page.is_a?(Hash) ? page.dup : {}
       original_url = "?"
 
       pagination.each do |page_name, number|
@@ -132,7 +134,16 @@ module ApiKit
     #
     # @return [Array] with the offset, limit and the current page number
     def api_pagination_params
-      pagination = params[:page].try(:slice, :number, :size) || {}
+      page = params[:page]
+      # `page=` names no page: the defaults, like a missing `page`.
+      page = nil if page.is_a?(String) && page.blank?
+      # `page=2` (or a JSON array / number) is not `page[number]=2`: a client error like
+      # `params.expect`, not a 500 from #slice.
+      unless page.nil? || page.is_a?(ActionController::Parameters) || page.is_a?(Hash)
+        raise ActionController::ParameterMissing, :page
+      end
+
+      pagination = page.try(:slice, :number, :size) || {}
       per_page = api_page_size(pagination)
       num = [ 1, pagination[:number].to_f.to_i ].max
 

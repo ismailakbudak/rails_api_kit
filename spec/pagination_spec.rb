@@ -332,4 +332,50 @@ RSpec.describe UsersController, type: :request do
       end
     end
   end
+
+  describe 'GET /users with a scalar page' do
+    # `page=2` is not `page[number]=2`: ParameterMissing, a client error, not a 500 from
+    # String#slice. This controller has no ApiKit::Errors, so Rails answers 400; with it, 422.
+    [ 'page=2', 'page[]=2' ].each do |query|
+      it "answers #{query} with a client error" do
+        get("#{users_path}?#{query}", headers: api_headers)
+
+        expect(response).to have_http_status(:bad_request)
+      end
+    end
+  end
+
+  describe 'GET /users with a blank page' do
+    # `page=` names no page: the defaults, like a missing `page`.
+    [ 'page=', 'page=%20' ].each do |query|
+      it "answers #{query} with the first page" do
+        get("#{users_path}?#{query}", headers: api_headers)
+
+        expect(response).to have_http_status(:ok)
+        expect(response_json.dig('meta', 'pagination', 'current')).to eq(1)
+      end
+    end
+  end
+
+  describe '#api_pagination_params with a typed non-hash page' do
+    # A JSON body reaches it typed: an array or a number is malformed too, never a #slice error.
+    let(:controller_class) do
+      Class.new do
+        include ApiKit::Pagination
+
+        attr_reader :params
+
+        def initialize(params)
+          @params = ActionController::Parameters.new(params)
+        end
+      end
+    end
+
+    [ [], 2 ].each do |page|
+      it "raises ParameterMissing for #{page.inspect}" do
+        expect { controller_class.new(page: page).send(:api_pagination_params) }
+          .to raise_error(ActionController::ParameterMissing)
+      end
+    end
+  end
 end
